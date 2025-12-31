@@ -1,0 +1,20 @@
+#!/bin/bash
+# Run these commands manually (they require sudo)
+
+echo "=== TREMS Database Setup ==="
+echo ""
+echo "Choose ONE method:"
+echo ""
+echo "METHOD 1: Docker (Recommended)"
+echo "  sudo usermod -aG docker $USER"
+echo "  # Log out and back in, then:"
+echo "  bash scripts/setup-docker-db.sh"
+echo ""
+echo "METHOD 2: System PostgreSQL"
+echo "  sudo apt update"
+echo "  sudo apt install -y postgresql postgresql-contrib"
+echo "  sudo -u postgres bash scripts/setup-database.sh"
+echo ""
+echo "After database is set up, run:"
+echo "  npm run db:migrate"
+echo "  npm run dev"

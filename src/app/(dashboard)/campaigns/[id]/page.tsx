@@ -1,0 +1,286 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, Edit, Send, Trash2, Copy } from 'lucide-react'
+
+interface Campaign {
+  id: string
+  name: string
+  subject: string
+  status: string
+  scheduledAt: string | null
+  sentAt: string | null
+  createdAt: string
+  htmlContent: string | null
+  tags: Array<{ tag: { id: string; name: string; color: string } }>
+  emailSends: Array<{
+    id: string
+    status: string
+    sentAt: string | null
+    contact: { email: string }
+  }>
+  _count: { emailSends: number }
+}
+
+export default function CampaignDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+
+  useEffect(() => {
+    if (params.id) {
+      fetchCampaign(params.id as string)
+    }
+  }, [params.id])
+
+  const fetchCampaign = async (id: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/campaigns/${id}`)
+      if (response.ok) {
+        const data = await response.json()
+        setCampaign(data)
+      }
+    } catch (error) {
+      console.error('Error fetching campaign:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSend = async () => {
+    if (!campaign) return
+    if (!confirm('Send this campaign to all selected recipients?')) return
+
+    setSending(true)
+    try {
+      const response = await fetch(`/api/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: campaign.id }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        toast.success(`Campaign sent! ${result.sent} emails sent successfully.`)
+        fetchCampaign(campaign.id)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to send campaign')
+      }
+    } catch (error) {
+      toast.error('Failed to send campaign')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!campaign) return
+    if (!confirm('Are you sure you want to delete this campaign?')) return
+
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        toast.success('Campaign deleted successfully')
+        router.push('/campaigns')
+      } else {
+        toast.error('Failed to delete campaign')
+      }
+    } catch (error) {
+      toast.error('Failed to delete campaign')
+    }
+  }
+
+  const handleDuplicate = async () => {
+    if (!campaign) return
+
+    setDuplicating(true)
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/duplicate`, {
+        method: 'POST',
+      })
+
+      if (response.ok) {
+        const newCampaign = await response.json()
+        toast.success('Campaign duplicated successfully')
+        router.push(`/campaigns/${newCampaign.id}`)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to duplicate campaign')
+      }
+    } catch (error) {
+      toast.error('Failed to duplicate campaign')
+    } finally {
+      setDuplicating(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="p-8">
+        <div className="text-center text-slate-400 py-8">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!campaign) {
+    return (
+      <div className="p-8">
+        <div className="text-center text-slate-400 py-8">Campaign not found</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-8">
+      <div className="mb-6">
+        <Link href="/campaigns">
+          <Button variant="ghost" className="mb-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Campaigns
+          </Button>
+        </Link>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-100">{campaign.name}</h1>
+            <p className="text-slate-400 mt-2">{campaign.subject}</p>
+          </div>
+          <div className="flex gap-2">
+            <Badge>{campaign.status}</Badge>
+            <Link href={`/campaigns/${campaign.id}/edit`}>
+              <Button variant="outline">
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+            </Link>
+            <Button variant="outline" onClick={handleDuplicate} disabled={duplicating}>
+              <Copy className="mr-2 h-4 w-4" />
+              {duplicating ? 'Duplicating...' : 'Duplicate'}
+            </Button>
+            {campaign.status === 'DRAFT' && (
+              <Button onClick={handleSend} disabled={sending}>
+                <Send className="mr-2 h-4 w-4" />
+                {sending ? 'Sending...' : 'Send Now'}
+              </Button>
+            )}
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle>Campaign Info</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm text-slate-400">Status</p>
+              <Badge>{campaign.status}</Badge>
+            </div>
+            {campaign.scheduledAt && (
+              <div>
+                <p className="text-sm text-slate-400">Scheduled For</p>
+                <p className="text-slate-100">
+                  {new Date(campaign.scheduledAt).toLocaleString()}
+                </p>
+              </div>
+            )}
+            {campaign.sentAt && (
+              <div>
+                <p className="text-sm text-slate-400">Sent At</p>
+                <p className="text-slate-100">
+                  {new Date(campaign.sentAt).toLocaleString()}
+                </p>
+              </div>
+            )}
+            <div>
+              <p className="text-sm text-slate-400">Recipients</p>
+              <p className="text-slate-100">{campaign._count.emailSends} contacts</p>
+            </div>
+            {campaign.tags.length > 0 && (
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Tags</p>
+                <div className="flex flex-wrap gap-2">
+                  {campaign.tags.map(({ tag }) => (
+                    <Badge
+                      key={tag.id}
+                      variant="outline"
+                      style={{ borderColor: tag.color }}
+                    >
+                      {tag.name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle>Email Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {campaign.htmlContent ? (
+              <div
+                className="border border-slate-800 rounded-lg p-4 bg-white"
+                dangerouslySetInnerHTML={{ __html: campaign.htmlContent }}
+              />
+            ) : (
+              <p className="text-slate-400 text-sm">No preview available</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-900 border-slate-800 md:col-span-2">
+          <CardHeader>
+            <CardTitle>Send History</CardTitle>
+            <CardDescription>Recent email sends for this campaign</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {campaign.emailSends.length === 0 ? (
+              <p className="text-slate-400 text-sm">No sends yet</p>
+            ) : (
+              <div className="space-y-2">
+                {campaign.emailSends.map((send) => (
+                  <div
+                    key={send.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-slate-800"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-100">{send.contact.email}</p>
+                      {send.sentAt && (
+                        <p className="text-sm text-slate-400">
+                          {new Date(send.sentAt).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <Badge>{send.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
