@@ -46,7 +46,9 @@ export async function POST(request: Request) {
 
     // Get contacts based on campaign tags
     const tagIds = campaign.tags.map((ct: { tagId: string }) => ct.tagId)
-    let contacts
+    
+    // Use Prisma's inferred type
+    let contacts: Awaited<ReturnType<typeof db.contact.findMany>>
 
     if (tagIds.length > 0) {
       contacts = await db.contact.findMany({
@@ -77,7 +79,7 @@ export async function POST(request: Request) {
         select: { contactId: true },
       })
       const sentContactIds = new Set(existingSends.map((s: { contactId: string }) => s.contactId))
-      contacts = contacts.filter((c: { id: string }) => !sentContactIds.has(c.id))
+      contacts = contacts.filter(c => !sentContactIds.has(c.id))
     }
 
     // Filter out invalid emails based on validation status
