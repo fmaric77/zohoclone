@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         validationMetadata: validationData.validationMetadata || {},
         tags: tagIds
           ? {
-              create: tagIds.map((tagId) => ({ tagId })),
+              create: tagIds.map((tagId: string) => ({ tagId })),
             }
           : undefined,
       },

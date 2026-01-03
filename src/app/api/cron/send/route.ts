@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       })
 
       // Get contacts based on campaign tags
-      const tagIds = campaign.tags.map((ct) => ct.tagId)
+      const tagIds = campaign.tags.map((ct: { tagId: string }) => ct.tagId)
       let contacts
 
       if (tagIds.length > 0) {

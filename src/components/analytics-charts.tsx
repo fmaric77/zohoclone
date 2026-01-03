@@ -31,10 +31,11 @@ interface AnalyticsChartsProps {
 
 export function AnalyticsCharts({ dailyEvents, eventCounts }: AnalyticsChartsProps) {
   // Group daily events by date
-  const dailyData = dailyEvents.reduce((acc: any[], event) => {
+  const dailyData = dailyEvents.reduce((acc: Array<Record<string, string | number>>, event: DailyEvent) => {
     const existing = acc.find((d) => d.date === event.date)
     if (existing) {
-      existing[event.type] = (existing[event.type] || 0) + event.count
+      const currentValue = existing[event.type]
+      existing[event.type] = (typeof currentValue === 'number' ? currentValue : 0) + event.count
     } else {
       acc.push({
         date: new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

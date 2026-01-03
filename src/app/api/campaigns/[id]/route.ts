@@ -101,7 +101,7 @@ export async function PATCH(
       })
       if (tagIds.length > 0) {
         await db.campaignTag.createMany({
-          data: tagIds.map((tagId) => ({
+          data: tagIds.map((tagId: string) => ({
             campaignId: id,
             tagId,
           })),

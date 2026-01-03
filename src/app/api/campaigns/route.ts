@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         tags: tagIds
           ? {
-              create: tagIds.map((tagId) => ({ tagId })),
+              create: tagIds.map((tagId: string) => ({ tagId })),
             }
           : undefined,
       },
