@@ -34,16 +34,8 @@ export async function GET(request: Request) {
 
     // Build CSV content
     const headers = ['email', 'firstName', 'lastName', 'status', 'tags', 'subscribedAt', 'customFields']
-    const rows = contacts.map((contact: {
-      email: string
-      firstName: string | null
-      lastName: string | null
-      status: string
-      subscribedAt: Date
-      customFields: any
-      tags: Array<{ tag: { name: string } }>
-    }) => {
-      const tags = contact.tags.map((ct: { tag: { name: string } }) => ct.tag.name).join(';')
+    const rows = contacts.map((contact: (typeof contacts)[number]) => {
+      const tags = contact.tags.map((ct: (typeof contact.tags)[number]) => ct.tag.name).join(';')
       const customFields = contact.customFields 
         ? JSON.stringify(contact.customFields) 
         : ''
