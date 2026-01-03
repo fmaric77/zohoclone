@@ -11,6 +11,7 @@
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "type-check:strict": "bash scripts/type-check.sh",
+    "type-check:build": "rm -rf .next && next build",
     "setup:password": "node scripts/setup-password.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",

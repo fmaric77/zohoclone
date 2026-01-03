@@ -84,7 +84,7 @@ export async function POST(request: Request) {
 
     // Filter out invalid emails based on validation status
     const initialContactCount = contacts.length
-    const validContacts = contacts.filter(contact => 
+    const validContacts = contacts.filter((contact: (typeof contacts)[number]) => 
       isValidForSending(contact.validationStatus || 'NOT_VALIDATED')
     )
     const skippedInvalid = initialContactCount - validContacts.length
