@@ -15,7 +15,7 @@ export default async function DashboardPage() {
       db.contact.count({ where: { status: 'SUBSCRIBED' } }),
       db.campaign.count(),
       db.emailSend.count({ where: { status: { in: ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'] } } }),
-      db.emailSend.count({ where: { status: 'OPENED' } }),
+      db.emailEvent.count({ where: { type: 'OPENED' } }),
     ])
     contactsCount = contacts
     campaignsCount = campaigns

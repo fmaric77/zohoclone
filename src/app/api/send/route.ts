@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         select: { contactId: true },
       })
       const sentContactIds = new Set(existingSends.map((s: { contactId: string }) => s.contactId))
-      contacts = contacts.filter(c => !sentContactIds.has(c.id))
+      contacts = contacts.filter((c: (typeof contacts)[number]) => !sentContactIds.has(c.id))
     }
 
     // Filter out invalid emails based on validation status
