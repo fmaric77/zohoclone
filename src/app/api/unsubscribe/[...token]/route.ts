@@ -4,10 +4,12 @@ import { verifyUnsubscribeToken, logEmailEvent } from '@/lib/tracking'
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ token: string }> }
+  { params }: { params: Promise<{ token: string[] }> }
 ) {
   try {
-    const { token } = await params
+    const { token: tokenSegments } = await params
+    // Catch-all route returns array - we only need the first segment (the actual token)
+    const token = tokenSegments[0]
     const contactId = verifyUnsubscribeToken(token)
 
     if (!contactId) {
@@ -40,10 +42,12 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ token: string }> }
+  { params }: { params: Promise<{ token: string[] }> }
 ) {
   try {
-    const { token } = await params
+    const { token: tokenSegments } = await params
+    // Catch-all route returns array - we only need the first segment (the actual token)
+    const token = tokenSegments[0]
     const { feedback } = await request.json()
     const contactId = verifyUnsubscribeToken(token)
 

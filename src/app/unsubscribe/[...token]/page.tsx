@@ -15,11 +15,21 @@ export default function UnsubscribePage() {
   const [contact, setContact] = useState<any>(null)
   const [feedback, setFeedback] = useState('')
 
+  // Handle catch-all route - token can be string or string[]
+  // We only need the first segment (the actual token)
+  const getToken = () => {
+    if (!params.token) return null
+    if (Array.isArray(params.token)) return params.token[0]
+    return params.token
+  }
+
+  const token = getToken()
+
   useEffect(() => {
-    if (params.token) {
-      fetchContact(params.token as string)
+    if (token) {
+      fetchContact(token)
     }
-  }, [params.token])
+  }, [token])
 
   const fetchContact = async (token: string) => {
     try {
@@ -36,11 +46,11 @@ export default function UnsubscribePage() {
   }
 
   const handleUnsubscribe = async () => {
-    if (!params.token) return
+    if (!token) return
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/unsubscribe/${params.token}`, {
+      const response = await fetch(`/api/unsubscribe/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feedback }),
