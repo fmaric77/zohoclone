@@ -21,7 +21,7 @@ export async function GET(request: Request) {
         where: { campaignId },
         select: { id: true },
       })
-      const sendIds = emailSends.map((s) => s.id)
+      const sendIds = emailSends.map((s: { id: string }) => s.id)
       where.sendId = { in: sendIds }
     }
 
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         where: { campaignId },
         select: { id: true },
       })
-      const sendIds = emailSends.map((s) => s.id)
+      const sendIds = emailSends.map((s: { id: string }) => s.id)
       
       dailyEvents = await db.$queryRaw`
         SELECT 
@@ -88,8 +88,8 @@ export async function GET(request: Request) {
     // Calculate stats for each campaign using EmailEvent counts
     const campaignsWithStats = await Promise.all(
       campaignStats.map(async (campaign) => {
-        const sendIds = campaign.emailSends.map((s) => s.id)
-        const sent = campaign.emailSends.filter((s) => 
+        const sendIds = campaign.emailSends.map((s: { id: string; status: string }) => s.id)
+        const sent = campaign.emailSends.filter((s: { id: string; status: string }) => 
           ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'].includes(s.status)
         ).length
         
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
         })
         const clicked = clickEvents.length
         
-        const bounced = campaign.emailSends.filter((s) => s.status === 'BOUNCED').length
+        const bounced = campaign.emailSends.filter((s: { id: string; status: string }) => s.status === 'BOUNCED').length
 
         return {
           id: campaign.id,
