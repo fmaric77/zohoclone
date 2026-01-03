@@ -87,7 +87,12 @@ export async function GET(request: Request) {
 
     // Calculate stats for each campaign using EmailEvent counts
     const campaignsWithStats = await Promise.all(
-      campaignStats.map(async (campaign) => {
+      campaignStats.map(async (campaign: {
+        id: string
+        name: string
+        _count: { emailSends: number }
+        emailSends: Array<{ id: string; status: string }>
+      }) => {
         const sendIds = campaign.emailSends.map((s: { id: string; status: string }) => s.id)
         const sent = campaign.emailSends.filter((s: { id: string; status: string }) => 
           ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'].includes(s.status)
