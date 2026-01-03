@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "echo '⚠️  Running clean build - this will catch all TypeScript errors'",
     "build": "next build",
+    "build:clean": "rm -rf .next && npm run build",
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",

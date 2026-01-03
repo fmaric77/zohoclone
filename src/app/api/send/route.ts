@@ -76,7 +76,7 @@ export async function POST(request: Request) {
         where: { campaignId },
         select: { contactId: true },
       })
-      const sentContactIds = new Set(existingSends.map(s => s.contactId))
+      const sentContactIds = new Set(existingSends.map((s: { contactId: string }) => s.contactId))
       contacts = contacts.filter(c => !sentContactIds.has(c.id))
     }
 
