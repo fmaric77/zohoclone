@@ -6,12 +6,16 @@ import { generateUnsubscribeToken } from '@/lib/tracking'
 import { isValidForSending } from '@/lib/zerobounce'
 import { emailRateLimiter } from '@/lib/rate-limiter'
 
+// Batch size optimized for Vercel free tier (60s timeout)
+// At 14 emails/sec + DB operations, ~200 emails keeps us safe under 60s
+const DEFAULT_BATCH_SIZE = 200
+
 export async function POST(request: Request) {
   let campaignId: string | undefined
   try {
     const body = await request.json()
     campaignId = body.campaignId
-    const { resend, resendMode, resume } = body
+    const { resend, resendMode, resume, batchSize = DEFAULT_BATCH_SIZE } = body
 
     if (!campaignId) {
       return NextResponse.json(
@@ -106,7 +110,26 @@ export async function POST(request: Request) {
     const skippedInvalid = initialContactCount - validContacts.length
     contacts = validContacts
 
+    // Calculate total before batching
+    const totalContacts = contacts.length
+
     if (contacts.length === 0) {
+      // If resuming/resending and no contacts left, mark as SENT
+      if (isResuming || resend) {
+        await db.campaign.update({
+          where: { id: campaignId },
+          data: { status: 'SENT' },
+        })
+        return NextResponse.json({
+          success: true,
+          sent: 0,
+          failed: 0,
+          remaining: 0,
+          total: 0,
+          message: 'All contacts have already received this campaign',
+        })
+      }
+
       // Provide more diagnostic information
       const tagNames = campaign.tags.map((ct: { tag: { name: string } }) => ct.tag.name).join(', ')
       const diagnosticMessage = tagIds.length > 0
@@ -117,10 +140,16 @@ export async function POST(request: Request) {
         success: false,
         sent: 0,
         failed: 0,
+        remaining: 0,
+        total: 0,
         errors: [diagnosticMessage],
         message: resend ? 'No new contacts to send to' : diagnosticMessage,
       })
     }
+
+    // Apply batch limit for Vercel free tier compatibility
+    const batchContacts = contacts.slice(0, batchSize)
+    const remaining = contacts.length - batchContacts.length
 
     // Update campaign status (skip if already SENDING from a resume)
     if (!isResuming) {
@@ -141,7 +170,7 @@ export async function POST(request: Request) {
       errors: [] as string[],
     }
 
-    for (const contact of contacts) {
+    for (const contact of batchContacts) {
       let emailSend: any = null
       try {
         // Create email send record
@@ -220,33 +249,40 @@ export async function POST(request: Request) {
     }
 
     // Update campaign status based on results
-    // Only mark as SENT if at least one email was sent successfully
-    if (results.sent > 0) {
-      await db.campaign.update({
-        where: { id: campaignId },
-        data: {
-          status: 'SENT',
-          sentAt: resend ? campaign.sentAt : new Date(),
-        },
-      })
-    } else {
-      // If no emails were sent, revert to DRAFT
-      await db.campaign.update({
-        where: { id: campaignId },
-        data: {
-          status: 'DRAFT',
-        },
-      })
+    // Only mark as SENT if no more emails remaining
+    if (remaining === 0) {
+      if (results.sent > 0) {
+        await db.campaign.update({
+          where: { id: campaignId },
+          data: {
+            status: 'SENT',
+            sentAt: resend ? campaign.sentAt : new Date(),
+          },
+        })
+      } else {
+        // If no emails were sent and nothing remaining, revert to DRAFT
+        await db.campaign.update({
+          where: { id: campaignId },
+          data: {
+            status: 'DRAFT',
+          },
+        })
+      }
     }
+    // If remaining > 0, keep status as SENDING for next batch
 
     return NextResponse.json({
       success: results.sent > 0,
       sent: results.sent,
       failed: results.failed,
+      remaining: remaining,
+      total: totalContacts,
       skippedInvalid: results.skippedInvalid,
       errors: results.errors,
       message: results.sent === 0 
         ? 'No emails were sent. Check errors for details.' 
+        : remaining > 0
+        ? `Batch complete. ${remaining} more emails to send.`
         : results.skippedInvalid > 0
         ? `${results.skippedInvalid} invalid email(s) were skipped.`
         : undefined,

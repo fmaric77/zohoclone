@@ -74,39 +74,54 @@ export default function CampaignDetailPage() {
     if (!confirm('Send this campaign to all selected recipients?')) return
 
     setSending(true)
-    try {
-      const response = await fetch(`/api/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId: campaign.id }),
-      })
+    let totalSent = 0
+    let totalFailed = 0
+    let batchNumber = 0
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.sent > 0) {
-          toast.success(`Campaign sent! ${result.sent} emails sent successfully.`)
-          if (result.failed > 0) {
-            toast.warning(`${result.failed} emails failed to send`)
-          }
-        } else {
-          // Show detailed error messages
-          let errorMessage = result.message || 'No emails were sent.'
-          if (result.errors && result.errors.length > 0) {
-            errorMessage += ` Errors: ${result.errors.slice(0, 3).join('; ')}`
-            if (result.errors.length > 3) {
-              errorMessage += ` (and ${result.errors.length - 3} more)`
-            }
-          } else if (result.failed > 0) {
-            errorMessage += ` ${result.failed} emails failed.`
-          }
-          toast.error(errorMessage, { duration: 10000 })
+    try {
+      // Send in batches until no more remaining
+      while (true) {
+        batchNumber++
+        
+        const response = await fetch(`/api/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            campaignId: campaign.id,
+            resume: batchNumber > 1, // After first batch, treat as resume
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          toast.error(error.error || error.details || 'Failed to send campaign', { duration: 10000 })
+          break
         }
-        fetchCampaign(campaign.id)
-      } else {
-        const error = await response.json()
-        toast.error(error.error || error.details || 'Failed to send campaign', { duration: 10000 })
-        fetchCampaign(campaign.id)
+
+        const result = await response.json()
+        totalSent += result.sent || 0
+        totalFailed += result.failed || 0
+
+        // Show progress for multi-batch sends
+        if (result.remaining > 0) {
+          toast.info(`Batch ${batchNumber} complete: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
+        } else {
+          // All done
+          break
+        }
       }
+
+      // Final summary
+      if (totalSent > 0) {
+        toast.success(`Campaign sent! ${totalSent} emails sent successfully.`)
+        if (totalFailed > 0) {
+          toast.warning(`${totalFailed} emails failed to send`)
+        }
+      } else {
+        toast.error('No emails were sent. Check campaign settings.')
+      }
+      
+      fetchCampaign(campaign.id)
     } catch (error) {
       toast.error('Failed to send campaign')
     } finally {
@@ -162,32 +177,55 @@ export default function CampaignDetailPage() {
     if (!campaign) return
 
     setResuming(true)
-    try {
-      const response = await fetch(`/api/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          campaignId: campaign.id,
-          resume: true,
-        }),
-      })
+    setResumeDialogOpen(false)
+    let totalSent = 0
+    let totalFailed = 0
+    let batchNumber = 0
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.sent > 0) {
-          toast.success(`Resume complete! ${result.sent} more emails sent.`)
-          if (result.failed > 0) {
-            toast.warning(`${result.failed} emails failed to send`)
-          }
-        } else {
-          toast.info('No remaining emails to send. Campaign marked as sent.')
+    try {
+      // Send in batches until no more remaining
+      while (true) {
+        batchNumber++
+        
+        const response = await fetch(`/api/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            campaignId: campaign.id,
+            resume: true,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          toast.error(error.error || error.details || 'Failed to resume campaign', { duration: 10000 })
+          break
         }
-        setResumeDialogOpen(false)
-        fetchCampaign(campaign.id)
-      } else {
-        const error = await response.json()
-        toast.error(error.error || error.details || 'Failed to resume campaign', { duration: 10000 })
+
+        const result = await response.json()
+        totalSent += result.sent || 0
+        totalFailed += result.failed || 0
+
+        // Show progress for multi-batch sends
+        if (result.remaining > 0) {
+          toast.info(`Batch ${batchNumber}: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
+        } else {
+          // All done
+          break
+        }
       }
+
+      // Final summary
+      if (totalSent > 0) {
+        toast.success(`Resume complete! ${totalSent} more emails sent.`)
+        if (totalFailed > 0) {
+          toast.warning(`${totalFailed} emails failed to send`)
+        }
+      } else {
+        toast.info('No remaining emails to send. Campaign marked as sent.')
+      }
+      
+      fetchCampaign(campaign.id)
     } catch (error) {
       toast.error('Failed to resume campaign')
     } finally {
@@ -225,48 +263,59 @@ export default function CampaignDetailPage() {
     if (!campaign) return
 
     setResending(true)
-    try {
-      const response = await fetch(`/api/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          campaignId: campaign.id,
-          resend: true,
-          resendMode: mode,
-        }),
-      })
+    setResendDialogOpen(false)
+    let totalSent = 0
+    let totalFailed = 0
+    let batchNumber = 0
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.sent === 0) {
-          if (mode === 'new') {
-            toast.info('No new contacts to send to')
-          } else {
-            // Show detailed error messages
-            let errorMessage = result.message || 'No emails were sent.'
-            if (result.errors && result.errors.length > 0) {
-              errorMessage += ` Errors: ${result.errors.slice(0, 3).join('; ')}`
-              if (result.errors.length > 3) {
-                errorMessage += ` (and ${result.errors.length - 3} more)`
-              }
-            } else if (result.failed > 0) {
-              errorMessage += ` ${result.failed} emails failed.`
-            }
-            toast.error(errorMessage, { duration: 10000 })
-          }
-        } else {
-          toast.success(`Campaign resent! ${result.sent} emails sent successfully.`)
-          if (result.failed > 0) {
-            toast.warning(`${result.failed} emails failed to send`)
-          }
+    try {
+      // Send in batches until no more remaining
+      while (true) {
+        batchNumber++
+        
+        const response = await fetch(`/api/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            campaignId: campaign.id,
+            resend: true,
+            resendMode: mode,
+            resume: batchNumber > 1, // After first batch, treat as resume
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          toast.error(error.error || error.details || 'Failed to resend campaign', { duration: 10000 })
+          break
         }
-        setResendDialogOpen(false)
-        fetchCampaign(campaign.id)
-      } else {
-        const error = await response.json()
-        toast.error(error.error || error.details || 'Failed to resend campaign', { duration: 10000 })
-        fetchCampaign(campaign.id)
+
+        const result = await response.json()
+        totalSent += result.sent || 0
+        totalFailed += result.failed || 0
+
+        // Show progress for multi-batch sends
+        if (result.remaining > 0) {
+          toast.info(`Batch ${batchNumber}: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
+        } else {
+          // All done
+          break
+        }
       }
+
+      // Final summary
+      if (totalSent > 0) {
+        toast.success(`Campaign resent! ${totalSent} emails sent successfully.`)
+        if (totalFailed > 0) {
+          toast.warning(`${totalFailed} emails failed to send`)
+        }
+      } else if (mode === 'new') {
+        toast.info('No new contacts to send to')
+      } else {
+        toast.error('No emails were sent. Check campaign settings.')
+      }
+      
+      fetchCampaign(campaign.id)
     } catch (error) {
       toast.error('Failed to resend campaign')
     } finally {
