@@ -2,13 +2,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { db } from '@/lib/db'
 import { Users, Mail, BarChart3, TrendingUp } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardPage() {
-  const [contactsCount, campaignsCount, sentCount, openedCount] = await Promise.all([
-    db.contact.count({ where: { status: 'SUBSCRIBED' } }),
-    db.campaign.count(),
-    db.emailSend.count({ where: { status: { in: ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'] } } }),
-    db.emailSend.count({ where: { status: 'OPENED' } }),
-  ])
+  let contactsCount = 0
+  let campaignsCount = 0
+  let sentCount = 0
+  let openedCount = 0
+
+  try {
+    const [contacts, campaigns, sent, opened] = await Promise.all([
+      db.contact.count({ where: { status: 'SUBSCRIBED' } }),
+      db.campaign.count(),
+      db.emailSend.count({ where: { status: { in: ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'] } } }),
+      db.emailSend.count({ where: { status: 'OPENED' } }),
+    ])
+    contactsCount = contacts
+    campaignsCount = campaigns
+    sentCount = sent
+    openedCount = opened
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error)
+    // Continue with default values of 0
+  }
 
   const openRate = sentCount > 0 ? ((openedCount / sentCount) * 100).toFixed(1) : '0'
 

@@ -76,6 +76,7 @@ export async function GET(request: Request) {
         },
         emailSends: {
           select: {
+            id: true,
             status: true,
           },
         },
@@ -84,26 +85,53 @@ export async function GET(request: Request) {
       take: 10,
     })
 
-    // Calculate stats for each campaign
-    const campaignsWithStats = campaignStats.map((campaign) => {
-      const sends = campaign.emailSends
-      const sent = sends.filter((s) => ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'].includes(s.status)).length
-      const opened = sends.filter((s) => ['OPENED', 'CLICKED'].includes(s.status)).length
-      const clicked = sends.filter((s) => s.status === 'CLICKED').length
-      const bounced = sends.filter((s) => s.status === 'BOUNCED').length
+    // Calculate stats for each campaign using EmailEvent counts
+    const campaignsWithStats = await Promise.all(
+      campaignStats.map(async (campaign) => {
+        const sendIds = campaign.emailSends.map((s) => s.id)
+        const sent = campaign.emailSends.filter((s) => 
+          ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'].includes(s.status)
+        ).length
+        
+        // Count unique opens (one per sendId)
+        const openEvents = await db.emailEvent.findMany({
+          where: {
+            sendId: { in: sendIds },
+            type: 'OPENED',
+            timestamp: { gte: startDate },
+          },
+          select: { sendId: true },
+          distinct: ['sendId'],
+        })
+        const opened = openEvents.length
+        
+        // Count unique clicks (one per sendId)
+        const clickEvents = await db.emailEvent.findMany({
+          where: {
+            sendId: { in: sendIds },
+            type: 'CLICKED',
+            timestamp: { gte: startDate },
+          },
+          select: { sendId: true },
+          distinct: ['sendId'],
+        })
+        const clicked = clickEvents.length
+        
+        const bounced = campaign.emailSends.filter((s) => s.status === 'BOUNCED').length
 
-      return {
-        id: campaign.id,
-        name: campaign.name,
-        total: campaign._count.emailSends,
-        sent,
-        opened,
-        clicked,
-        bounced,
-        openRate: sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0',
-        clickRate: sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0',
-      }
-    })
+        return {
+          id: campaign.id,
+          name: campaign.name,
+          total: campaign._count.emailSends,
+          sent,
+          opened,
+          clicked,
+          bounced,
+          openRate: sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0',
+          clickRate: sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0',
+        }
+      })
+    )
 
     // Overall stats
     const totalContacts = await db.contact.count({ where: { status: 'SUBSCRIBED' } })

@@ -3,10 +3,15 @@ import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/ses'
 import { processEmailContent, processMergeTags } from '@/lib/email-processor'
 import { generateUnsubscribeToken } from '@/lib/tracking'
+import { isValidForSending } from '@/lib/zerobounce'
+import { emailRateLimiter } from '@/lib/rate-limiter'
 
 export async function POST(request: Request) {
+  let campaignId: string | undefined
   try {
-    const { campaignId } = await request.json()
+    const body = await request.json()
+    campaignId = body.campaignId
+    const { resend, resendMode } = body
 
     if (!campaignId) {
       return NextResponse.json(
@@ -65,11 +70,38 @@ export async function POST(request: Request) {
       })
     }
 
+    // If resending to new contacts only, filter out those who already received
+    if (resend && resendMode === 'new') {
+      const existingSends = await db.emailSend.findMany({
+        where: { campaignId },
+        select: { contactId: true },
+      })
+      const sentContactIds = new Set(existingSends.map(s => s.contactId))
+      contacts = contacts.filter(c => !sentContactIds.has(c.id))
+    }
+
+    // Filter out invalid emails based on validation status
+    const initialContactCount = contacts.length
+    const validContacts = contacts.filter(contact => 
+      isValidForSending(contact.validationStatus || 'NOT_VALIDATED')
+    )
+    const skippedInvalid = initialContactCount - validContacts.length
+    contacts = validContacts
+
     if (contacts.length === 0) {
-      return NextResponse.json(
-        { error: 'No contacts found for this campaign' },
-        { status: 400 }
-      )
+      // Provide more diagnostic information
+      const tagNames = campaign.tags.map(ct => ct.tag.name).join(', ')
+      const diagnosticMessage = tagIds.length > 0
+        ? `No subscribed contacts found with tags: ${tagNames || 'none'}`
+        : 'No subscribed contacts found in database'
+      
+      return NextResponse.json({
+        success: false,
+        sent: 0,
+        failed: 0,
+        errors: [diagnosticMessage],
+        message: resend ? 'No new contacts to send to' : diagnosticMessage,
+      })
     }
 
     // Update campaign status
@@ -77,7 +109,7 @@ export async function POST(request: Request) {
       where: { id: campaignId },
       data: {
         status: 'SENDING',
-        sentAt: new Date(),
+        sentAt: resend ? campaign.sentAt : new Date(), // Keep original sentAt on resend
       },
     })
 
@@ -85,13 +117,15 @@ export async function POST(request: Request) {
     const results = {
       sent: 0,
       failed: 0,
+      skippedInvalid: skippedInvalid,
       errors: [] as string[],
     }
 
     for (const contact of contacts) {
+      let emailSend: any = null
       try {
         // Create email send record
-        const emailSend = await db.emailSend.create({
+        emailSend = await db.emailSend.create({
           data: {
             campaignId,
             contactId: contact.id,
@@ -112,6 +146,9 @@ export async function POST(request: Request) {
 
         // Process subject line with merge tags
         const processedSubject = processMergeTags(campaign.subject, contact)
+
+        // Wait for rate limit slot (max 14 emails per second)
+        await emailRateLimiter.waitForSlot()
 
         // Send email via SES
         const messageId = await sendEmail({
@@ -142,27 +179,75 @@ export async function POST(request: Request) {
         results.sent++
       } catch (error: any) {
         results.failed++
-        results.errors.push(`Failed to send to ${contact.email}: ${error.message}`)
+        const errorMsg = error.message || error.toString() || 'Unknown error'
+        results.errors.push(`Failed to send to ${contact.email}: ${errorMsg}`)
         console.error(`Error sending to ${contact.email}:`, error)
+        
+        // Update email send record with failure status if it was created
+        if (emailSend) {
+          try {
+            await db.emailSend.update({
+              where: { id: emailSend.id },
+              data: {
+                status: 'FAILED',
+              },
+            })
+          } catch (updateError) {
+            console.error('Failed to update email send status:', updateError)
+          }
+        }
       }
     }
 
-    // Update campaign status to SENT
-    await db.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'SENT',
-      },
-    })
+    // Update campaign status based on results
+    // Only mark as SENT if at least one email was sent successfully
+    if (results.sent > 0) {
+      await db.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: 'SENT',
+          sentAt: resend ? campaign.sentAt : new Date(),
+        },
+      })
+    } else {
+      // If no emails were sent, revert to DRAFT
+      await db.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: 'DRAFT',
+        },
+      })
+    }
 
     return NextResponse.json({
-      success: true,
+      success: results.sent > 0,
       sent: results.sent,
       failed: results.failed,
+      skippedInvalid: results.skippedInvalid,
       errors: results.errors,
+      message: results.sent === 0 
+        ? 'No emails were sent. Check errors for details.' 
+        : results.skippedInvalid > 0
+        ? `${results.skippedInvalid} invalid email(s) were skipped.`
+        : undefined,
     })
   } catch (error: any) {
     console.error('Error sending campaign:', error)
+    
+    // Revert campaign status to DRAFT if sending failed
+    if (campaignId) {
+      try {
+        await db.campaign.update({
+          where: { id: campaignId },
+          data: {
+            status: 'DRAFT',
+          },
+        })
+      } catch (updateError) {
+        console.error('Failed to revert campaign status:', updateError)
+      }
+    }
+    
     return NextResponse.json(
       { error: 'Failed to send campaign', details: error.message },
       { status: 500 }

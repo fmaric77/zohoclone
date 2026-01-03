@@ -15,7 +15,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ArrowLeft, Save, Trash2 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ArrowLeft, Save, Trash2, Plus, X, ChevronDown } from 'lucide-react'
+
+interface Tag {
+  id: string
+  name: string
+  color: string
+}
 
 interface Contact {
   id: string
@@ -41,6 +53,8 @@ export default function ContactDetailPage() {
   const [contact, setContact] = useState<Contact | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  const [contactTagIds, setContactTagIds] = useState<string[]>([])
   const [formData, setFormData] = useState({
     email: '',
     firstName: '',
@@ -49,10 +63,23 @@ export default function ContactDetailPage() {
   })
 
   useEffect(() => {
+    fetchAllTags()
     if (params.id) {
       fetchContact(params.id as string)
     }
   }, [params.id])
+
+  const fetchAllTags = async () => {
+    try {
+      const response = await fetch('/api/tags')
+      if (response.ok) {
+        const data = await response.json()
+        setAllTags(data)
+      }
+    } catch (error) {
+      console.error('Error fetching tags:', error)
+    }
+  }
 
   const fetchContact = async (id: string) => {
     setLoading(true)
@@ -67,6 +94,10 @@ export default function ContactDetailPage() {
           lastName: data.lastName || '',
           status: data.status,
         })
+        // Set current tags
+        if (data.tags) {
+          setContactTagIds(data.tags.map((t: any) => t.tag?.id || t.tagId))
+        }
       }
     } catch (error) {
       console.error('Error fetching contact:', error)
@@ -74,6 +105,73 @@ export default function ContactDetailPage() {
       setLoading(false)
     }
   }
+
+  const handleToggleTag = async (tagId: string) => {
+    if (!contact) return
+    
+    const isAdding = !contactTagIds.includes(tagId)
+    const newTagIds = isAdding
+      ? [...contactTagIds, tagId]
+      : contactTagIds.filter(id => id !== tagId)
+    
+    // Optimistic update
+    setContactTagIds(newTagIds)
+    
+    try {
+      const response = await fetch('/api/contacts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isAdding ? 'tag' : 'untag',
+          contactIds: [contact.id],
+          tagId,
+        }),
+      })
+
+      if (response.ok) {
+        // Refresh contact to get updated tags
+        fetchContact(contact.id)
+      } else {
+        // Revert on failure
+        setContactTagIds(contactTagIds)
+        toast.error('Failed to update tag')
+      }
+    } catch (error) {
+      setContactTagIds(contactTagIds)
+      toast.error('Failed to update tag')
+    }
+  }
+
+  const handleRemoveTag = async (tagId: string) => {
+    if (!contact) return
+    
+    const newTagIds = contactTagIds.filter(id => id !== tagId)
+    setContactTagIds(newTagIds)
+    
+    try {
+      const response = await fetch('/api/contacts/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'untag',
+          contactIds: [contact.id],
+          tagId,
+        }),
+      })
+
+      if (!response.ok) {
+        setContactTagIds(contactTagIds)
+        toast.error('Failed to remove tag')
+      } else {
+        fetchContact(contact.id)
+      }
+    } catch (error) {
+      setContactTagIds(contactTagIds)
+      toast.error('Failed to remove tag')
+    }
+  }
+
+  const selectedTags = allTags.filter(tag => contactTagIds.includes(tag.id))
 
   const handleSave = async () => {
     if (!contact) return
@@ -223,20 +321,70 @@ export default function ContactDetailPage() {
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader>
             <CardTitle>Tags</CardTitle>
-            <CardDescription>Contact tags</CardDescription>
+            <CardDescription>Assign contact to groups</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between bg-slate-800 border-slate-700 hover:bg-slate-700"
+                >
+                  <span className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add to group
+                  </span>
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-56">
+                {allTags.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-slate-400">
+                    No tags available. Create one first.
+                  </div>
+                ) : (
+                  allTags.map((tag) => (
+                    <DropdownMenuCheckboxItem
+                      key={tag.id}
+                      checked={contactTagIds.includes(tag.id)}
+                      onCheckedChange={() => handleToggleTag(tag.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: tag.color }}
+                        />
+                        {tag.name}
+                      </div>
+                    </DropdownMenuCheckboxItem>
+                  ))
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
             <div className="flex flex-wrap gap-2">
-              {contact.tags.length === 0 ? (
-                <p className="text-slate-400 text-sm">No tags</p>
+              {selectedTags.length === 0 ? (
+                <p className="text-slate-400 text-sm">Not assigned to any groups</p>
               ) : (
-                contact.tags.map(({ tag }) => (
+                selectedTags.map((tag) => (
                   <Badge
                     key={tag.id}
-                    variant="outline"
-                    style={{ borderColor: tag.color }}
+                    variant="secondary"
+                    className="pl-2 pr-1 py-1"
+                    style={{ borderColor: tag.color, borderWidth: 1 }}
                   >
+                    <div
+                      className="w-2 h-2 rounded-full mr-1.5"
+                      style={{ backgroundColor: tag.color }}
+                    />
                     {tag.name}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag.id)}
+                      className="ml-1 hover:bg-slate-600 rounded p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </Badge>
                 ))
               )}

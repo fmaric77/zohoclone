@@ -7,7 +7,7 @@ const updateSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   status: z.enum(['SUBSCRIBED', 'UNSUBSCRIBED', 'BOUNCED']).optional(),
-  customFields: z.record(z.any()).optional(),
+  customFields: z.record(z.string(), z.any()).optional(),
   tagIds: z.array(z.string()).optional(),
 })
 
@@ -90,7 +90,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid data', details: error.errors },
+        { error: 'Invalid data', details: error.issues },
         { status: 400 }
       )
     }

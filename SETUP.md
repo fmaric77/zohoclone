@@ -79,6 +79,11 @@ AWS_SECRET_ACCESS_KEY="your-aws-secret"
 AWS_REGION="us-east-1"
 SES_FROM_EMAIL="campaigns@yourdomain.com"
 
+# ZeroBounce (optional: for email validation)
+# Get your API key from https://www.zerobounce.net/
+# If not provided, email validation will be skipped
+ZEROBOUNCE_API_KEY="your-zerobounce-api-key"
+
 # App URL
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```

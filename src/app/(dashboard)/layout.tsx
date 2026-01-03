@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Tags,
 } from 'lucide-react'
 import { LogoutButton } from '@/components/logout-button'
 
@@ -30,6 +31,9 @@ export default function DashboardLayout({
             </NavLink>
             <NavLink href="/contacts" icon={Users}>
               Contacts
+            </NavLink>
+            <NavLink href="/tags" icon={Tags}>
+              Tags
             </NavLink>
             <NavLink href="/campaigns" icon={Mail}>
               Campaigns

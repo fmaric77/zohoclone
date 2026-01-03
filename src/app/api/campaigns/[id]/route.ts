@@ -44,7 +44,36 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(campaign)
+    // Calculate potential recipients based on campaign tags
+    const tagIds = campaign.tags.map((ct) => ct.tagId)
+    let potentialRecipients = 0
+
+    if (tagIds.length > 0) {
+      potentialRecipients = await db.contact.count({
+        where: {
+          status: 'SUBSCRIBED',
+          tags: {
+            some: {
+              tagId: {
+                in: tagIds,
+              },
+            },
+          },
+        },
+      })
+    } else {
+      // If no tags, count all subscribed contacts
+      potentialRecipients = await db.contact.count({
+        where: {
+          status: 'SUBSCRIBED',
+        },
+      })
+    }
+
+    return NextResponse.json({
+      ...campaign,
+      potentialRecipients,
+    })
   } catch (error) {
     console.error('Error fetching campaign:', error)
     return NextResponse.json(
@@ -97,7 +126,7 @@ export async function PATCH(
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid data', details: error.errors },
+        { error: 'Invalid data', details: error.issues },
         { status: 400 }
       )
     }

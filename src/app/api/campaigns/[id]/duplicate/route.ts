@@ -28,8 +28,8 @@ export async function POST(
       data: {
         name: `${original.name} (Copy)`,
         subject: original.subject,
-        designJson: original.designJson,
-        htmlContent: original.htmlContent,
+        designJson: original.designJson ?? undefined,
+        htmlContent: original.htmlContent ?? undefined,
         status: 'DRAFT',
         // Reset scheduling
         scheduledAt: null,

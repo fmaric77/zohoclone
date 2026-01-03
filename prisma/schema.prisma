@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,34 +7,37 @@ datasource db {
 }
 
 model Contact {
-  id             String        @id @default(cuid())
-  email          String        @unique
-  firstName      String?
-  lastName       String?
-  status         ContactStatus @default(SUBSCRIBED)
-  subscribedAt   DateTime      @default(now())
-  unsubscribedAt DateTime?
-  customFields   Json?         @default("{}")
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  tags       ContactTag[]
-  emailSends EmailSend[]
-  events     EmailEvent[]
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  firstName          String?
+  lastName           String?
+  status             ContactStatus    @default(SUBSCRIBED)
+  subscribedAt       DateTime         @default(now())
+  unsubscribedAt     DateTime?
+  customFields       Json?            @default("{}")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  validatedAt        DateTime?
+  validationMetadata Json?            @default("{}")
+  validationScore    Float?
+  validationStatus   ValidationStatus @default(NOT_VALIDATED)
+  tags               ContactTag[]
+  events             EmailEvent[]
+  emailSends         EmailSend[]
 
   @@index([email])
   @@index([status])
+  @@index([validationStatus])
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  color     String   @default("#3b82f6")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  contacts  ContactTag[]
+  id        String        @id @default(cuid())
+  name      String        @unique
+  color     String        @default("#3b82f6")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   campaigns CampaignTag[]
+  contacts  ContactTag[]
 }
 
 model ContactTag {
@@ -45,9 +45,8 @@ model ContactTag {
   contactId String
   tagId     String
   createdAt DateTime @default(now())
-
-  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([contactId, tagId])
   @@index([contactId])
@@ -55,19 +54,18 @@ model ContactTag {
 }
 
 model Campaign {
-  id          String          @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
   subject     String
-  designJson  Json?           // Unlayer design JSON
-  htmlContent String?         // Rendered HTML
-  status      CampaignStatus  @default(DRAFT)
+  designJson  Json?
+  htmlContent String?
+  status      CampaignStatus @default(DRAFT)
   scheduledAt DateTime?
   sentAt      DateTime?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  tags      CampaignTag[]
-  emailSends EmailSend[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tags        CampaignTag[]
+  emailSends  EmailSend[]
 
   @@index([status])
   @@index([scheduledAt])
@@ -78,9 +76,8 @@ model CampaignTag {
   campaignId String
   tagId      String
   createdAt  DateTime @default(now())
-
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, tagId])
   @@index([campaignId])
@@ -88,20 +85,19 @@ model CampaignTag {
 }
 
 model EmailSend {
-  id         String         @id @default(cuid())
+  id         String          @id @default(cuid())
   campaignId String
   contactId  String
-  messageId  String?        // SES message ID
+  messageId  String?
   status     EmailSendStatus @default(PENDING)
   sentAt     DateTime?
   openedAt   DateTime?
   clickedAt  DateTime?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-
-  campaign Contact  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  contact  Campaign @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  events   EmailEvent[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  events     EmailEvent[]
+  campaign   Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
   @@index([contactId])
@@ -110,16 +106,15 @@ model EmailSend {
 }
 
 model EmailEvent {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   sendId    String
   contactId String
   type      EventType
-  url       String?  // For click events
-  metadata  Json?    @default("{}")
-  timestamp DateTime @default(now())
-
-  send    EmailSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
-  contact Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  url       String?
+  metadata  Json?     @default("{}")
+  timestamp DateTime  @default(now())
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  send      EmailSend @relation(fields: [sendId], references: [id], onDelete: Cascade)
 
   @@index([sendId])
   @@index([contactId])
@@ -162,3 +157,10 @@ enum EventType {
   UNSUBSCRIBED
 }
 
+enum ValidationStatus {
+  VALID
+  INVALID
+  CATCH_ALL
+  UNKNOWN
+  NOT_VALIDATED
+}

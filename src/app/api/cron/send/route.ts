@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/ses'
 import { processEmailContent, processMergeTags } from '@/lib/email-processor'
 import { generateUnsubscribeToken } from '@/lib/tracking'
+import { emailRateLimiter } from '@/lib/rate-limiter'
 
 // This endpoint should be called by a cron job (Vercel Cron or similar)
 // to send scheduled campaigns
@@ -102,6 +103,9 @@ export async function GET(request: Request) {
 
           // Process subject line with merge tags
           const processedSubject = processMergeTags(campaign.subject, contact)
+
+          // Wait for rate limit slot (max 14 emails per second)
+          await emailRateLimiter.waitForSlot()
 
           // Send email via SES
           const messageId = await sendEmail({

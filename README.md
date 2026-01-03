@@ -5,6 +5,7 @@ A private, single-user email campaign platform built with Next.js 14, PostgreSQL
 ## Features
 
 - **Contact Management**: Import contacts via CSV, organize with tags, track consent status
+- **Email Validation**: ZeroBounce integration for email validation during import and before sending
 - **Rich Email Editor**: Drag-and-drop email builder using Unlayer
 - **Campaign Management**: Create, schedule, and send email campaigns
 - **Advanced Tracking**: Track opens, clicks, bounces, and complaints
@@ -59,6 +60,7 @@ A private, single-user email campaign platform built with Next.js 14, PostgreSQL
    APP_SECRET="generate-a-random-32-character-secret"
    ADMIN_PASSWORD_HASH="generate-with: node -e \"console.log(require('bcryptjs').hashSync('your-password', 10))\""
    NEXT_PUBLIC_APP_URL="http://localhost:3000"
+   ZEROBOUNCE_API_KEY="your-zerobounce-api-key"  # Optional: for email validation
    ```
 
 5. **Run the development server**:

@@ -43,6 +43,34 @@ export function EmailEditor({
       appearance: {
         theme: 'dark',
       },
+      features: {
+        textEditor: {
+          tables: true,
+          cleanPaste: true,
+        },
+      },
+      designTags: {
+        business_name: 'Trems',
+        business_email: 'info@trems.hr',
+      },
+      // Set default body/content width
+      options: {
+        bodyValues: {
+          contentWidth: '100%',
+          contentWidthMax: 700,
+        },
+      },
+      // Default design settings for new emails
+      designTagsConfig: {
+        delimiter: ['{{', '}}'],
+      },
+    })
+
+    // Set default body settings after editor loads
+    editorRef.current.addEventListener('editor:ready', () => {
+      editorRef.current.setBodyValues({
+        contentWidth: '100%',
+      })
     })
 
     setEditorReady(true)

@@ -7,7 +7,14 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Edit, Send, Trash2, Copy } from 'lucide-react'
+import { ArrowLeft, Edit, Send, Trash2, Copy, RefreshCw } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface Campaign {
   id: string
@@ -26,6 +33,7 @@ interface Campaign {
     contact: { email: string }
   }>
   _count: { emailSends: number }
+  potentialRecipients: number
 }
 
 export default function CampaignDetailPage() {
@@ -35,6 +43,8 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
+  const [resendDialogOpen, setResendDialogOpen] = useState(false)
+  const [resending, setResending] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -71,11 +81,29 @@ export default function CampaignDetailPage() {
 
       if (response.ok) {
         const result = await response.json()
-        toast.success(`Campaign sent! ${result.sent} emails sent successfully.`)
+        if (result.sent > 0) {
+          toast.success(`Campaign sent! ${result.sent} emails sent successfully.`)
+          if (result.failed > 0) {
+            toast.warning(`${result.failed} emails failed to send`)
+          }
+        } else {
+          // Show detailed error messages
+          let errorMessage = result.message || 'No emails were sent.'
+          if (result.errors && result.errors.length > 0) {
+            errorMessage += ` Errors: ${result.errors.slice(0, 3).join('; ')}`
+            if (result.errors.length > 3) {
+              errorMessage += ` (and ${result.errors.length - 3} more)`
+            }
+          } else if (result.failed > 0) {
+            errorMessage += ` ${result.failed} emails failed.`
+          }
+          toast.error(errorMessage, { duration: 10000 })
+        }
         fetchCampaign(campaign.id)
       } else {
         const error = await response.json()
-        toast.error(error.error || 'Failed to send campaign')
+        toast.error(error.error || error.details || 'Failed to send campaign', { duration: 10000 })
+        fetchCampaign(campaign.id)
       }
     } catch (error) {
       toast.error('Failed to send campaign')
@@ -128,6 +156,59 @@ export default function CampaignDetailPage() {
     }
   }
 
+  const handleResend = async (mode: 'new' | 'all') => {
+    if (!campaign) return
+
+    setResending(true)
+    try {
+      const response = await fetch(`/api/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          campaignId: campaign.id,
+          resend: true,
+          resendMode: mode,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.sent === 0) {
+          if (mode === 'new') {
+            toast.info('No new contacts to send to')
+          } else {
+            // Show detailed error messages
+            let errorMessage = result.message || 'No emails were sent.'
+            if (result.errors && result.errors.length > 0) {
+              errorMessage += ` Errors: ${result.errors.slice(0, 3).join('; ')}`
+              if (result.errors.length > 3) {
+                errorMessage += ` (and ${result.errors.length - 3} more)`
+              }
+            } else if (result.failed > 0) {
+              errorMessage += ` ${result.failed} emails failed.`
+            }
+            toast.error(errorMessage, { duration: 10000 })
+          }
+        } else {
+          toast.success(`Campaign resent! ${result.sent} emails sent successfully.`)
+          if (result.failed > 0) {
+            toast.warning(`${result.failed} emails failed to send`)
+          }
+        }
+        setResendDialogOpen(false)
+        fetchCampaign(campaign.id)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || error.details || 'Failed to resend campaign', { duration: 10000 })
+        fetchCampaign(campaign.id)
+      }
+    } catch (error) {
+      toast.error('Failed to resend campaign')
+    } finally {
+      setResending(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -176,6 +257,15 @@ export default function CampaignDetailPage() {
                 {sending ? 'Sending...' : 'Send Now'}
               </Button>
             )}
+            {campaign.status === 'SENT' && (
+              <Button 
+                variant="outline" 
+                onClick={() => setResendDialogOpen(true)}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Resend
+              </Button>
+            )}
             <Button variant="destructive" onClick={handleDelete}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
@@ -211,8 +301,25 @@ export default function CampaignDetailPage() {
               </div>
             )}
             <div>
-              <p className="text-sm text-slate-400">Recipients</p>
-              <p className="text-slate-100">{campaign._count.emailSends} contacts</p>
+              <p className="text-sm text-slate-400">
+                {campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED' 
+                  ? 'Potential Recipients' 
+                  : 'Recipients'}
+              </p>
+              {campaign.status === 'DRAFT' || campaign.status === 'SCHEDULED' ? (
+                <p className="text-slate-100">
+                  {campaign.potentialRecipients} contact{campaign.potentialRecipients !== 1 ? 's' : ''}
+                </p>
+              ) : (
+                <p className="text-slate-100">
+                  {campaign._count.emailSends} sent
+                  {campaign.potentialRecipients > campaign._count.emailSends && (
+                    <span className="text-slate-400 text-sm ml-1">
+                      ({campaign.potentialRecipients - campaign._count.emailSends} new available)
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             {campaign.tags.length > 0 && (
               <div>
@@ -280,6 +387,49 @@ export default function CampaignDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Resend Dialog */}
+      <Dialog open={resendDialogOpen} onOpenChange={setResendDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resend Campaign</DialogTitle>
+            <DialogDescription>
+              Choose how you want to resend this campaign
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-4">
+            <Button
+              className="w-full justify-start h-auto py-4"
+              variant="outline"
+              onClick={() => handleResend('new')}
+              disabled={resending}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Send to new contacts only</div>
+                <div className="text-sm text-slate-400 font-normal">
+                  Only contacts who haven't received this campaign yet
+                </div>
+              </div>
+            </Button>
+            <Button
+              className="w-full justify-start h-auto py-4"
+              variant="outline"
+              onClick={() => handleResend('all')}
+              disabled={resending}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Resend to all contacts</div>
+                <div className="text-sm text-slate-400 font-normal">
+                  Send again to everyone in the target groups
+                </div>
+              </div>
+            </Button>
+            {resending && (
+              <p className="text-center text-sm text-slate-400">Sending...</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

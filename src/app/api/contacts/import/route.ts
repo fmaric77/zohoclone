@@ -1,17 +1,29 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import Papa from 'papaparse'
+import { validateEmail } from '@/lib/zerobounce'
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File
+    const tagIdsJson = formData.get('tagIds') as string | null
 
     if (!file) {
       return NextResponse.json(
         { error: 'No file provided' },
         { status: 400 }
       )
+    }
+
+    // Parse tagIds if provided
+    let tagIds: string[] = []
+    if (tagIdsJson) {
+      try {
+        tagIds = JSON.parse(tagIdsJson)
+      } catch {
+        // Ignore parsing errors, just don't assign tags
+      }
     }
 
     const text = await file.text()
@@ -32,7 +44,18 @@ export async function POST(request: Request) {
       created: 0,
       updated: 0,
       errors: [] as string[],
+      validation: {
+        validated: 0,
+        valid: 0,
+        invalid: 0,
+        catchAll: 0,
+        unknown: 0,
+        failed: 0,
+      },
     }
+
+    // Collect contact IDs for tag assignment
+    const contactIdsToTag: string[] = []
 
     for (const row of contacts) {
       try {
@@ -56,35 +79,113 @@ export async function POST(request: Request) {
           }
         })
 
+        // Validate email (non-blocking - continue even if validation fails)
+        let validationData: {
+          validationStatus: 'VALID' | 'INVALID' | 'CATCH_ALL' | 'UNKNOWN' | 'NOT_VALIDATED'
+          validatedAt: Date | null
+          validationScore: number | null
+          validationMetadata: Record<string, any> | null
+        } = {
+          validationStatus: 'NOT_VALIDATED',
+          validatedAt: null,
+          validationScore: null,
+          validationMetadata: null,
+        }
+
+        try {
+          const validationResult = await validateEmail(email, true)
+          if (validationResult) {
+            validationData = {
+              validationStatus: validationResult.status,
+              validatedAt: validationResult.validatedAt,
+              validationScore: validationResult.score,
+              validationMetadata: validationResult.metadata,
+            }
+            results.validation.validated++
+            
+            // Count by status
+            if (validationResult.status === 'VALID') {
+              results.validation.valid++
+            } else if (validationResult.status === 'INVALID') {
+              results.validation.invalid++
+            } else if (validationResult.status === 'CATCH_ALL') {
+              results.validation.catchAll++
+            } else if (validationResult.status === 'UNKNOWN') {
+              results.validation.unknown++
+            }
+          } else {
+            results.validation.failed++
+          }
+        } catch (validationError: any) {
+          // Don't block import if validation fails
+          console.warn(`Validation failed for ${email}:`, validationError.message)
+          results.validation.failed++
+        }
+
         const existing = await db.contact.findUnique({
           where: { email },
         })
 
         if (existing) {
+          const existingCustomFields = existing.customFields && typeof existing.customFields === 'object' && !Array.isArray(existing.customFields)
+            ? existing.customFields as Record<string, any>
+            : {}
+          
           await db.contact.update({
             where: { email },
             data: {
               firstName: firstName || existing.firstName,
               lastName: lastName || existing.lastName,
-              customFields: { ...existing.customFields, ...customFields },
+              customFields: { ...existingCustomFields, ...customFields },
+              ...(validationData.validatedAt && {
+                validationStatus: validationData.validationStatus,
+                validatedAt: validationData.validatedAt,
+                validationScore: validationData.validationScore,
+                validationMetadata: validationData.validationMetadata || {},
+              }),
             },
           })
+          contactIdsToTag.push(existing.id)
           results.updated++
         } else {
-          await db.contact.create({
+          const newContact = await db.contact.create({
             data: {
               email,
               firstName,
               lastName,
               customFields,
               status: 'SUBSCRIBED',
+              validationStatus: validationData.validationStatus,
+              validatedAt: validationData.validatedAt,
+              validationScore: validationData.validationScore,
+              validationMetadata: validationData.validationMetadata || {},
             },
           })
+          contactIdsToTag.push(newContact.id)
           results.created++
         }
       } catch (error: any) {
         results.errors.push(`Error processing row: ${error.message}`)
       }
+    }
+
+    // Assign tags to all imported/updated contacts
+    if (tagIds.length > 0 && contactIdsToTag.length > 0) {
+      const tagAssignments = []
+      for (const contactId of contactIdsToTag) {
+        for (const tagId of tagIds) {
+          tagAssignments.push({
+            contactId,
+            tagId,
+          })
+        }
+      }
+
+      // Use createMany with skipDuplicates to avoid errors on existing assignments
+      await db.contactTag.createMany({
+        data: tagAssignments,
+        skipDuplicates: true,
+      })
     }
 
     return NextResponse.json(results)

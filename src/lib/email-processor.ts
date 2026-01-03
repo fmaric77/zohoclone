@@ -37,10 +37,22 @@ export function injectTrackingPixel(html: string, sendId: string): string {
 }
 
 export function injectClickTracking(html: string, sendId: string): string {
-  // Find all links (href="...")
+  // First, convert plain text URLs to HTML links if they're not already links
+  // This handles plain text emails where URLs are just text
+  const urlRegex = /(^|[^"'>])(https?:\/\/[^\s<>"']+)/gi
+  let processed = html.replace(urlRegex, (match, before, url) => {
+    // Skip if already inside an <a> tag
+    if (match.includes('<a') || match.includes('href=')) {
+      return match
+    }
+    // Convert plain text URL to HTML link
+    return `${before}<a href="${url}">${url}</a>`
+  })
+
+  // Find all links (href="...") and add tracking
   const linkRegex = /<a\s+([^>]*\s+)?href=["']([^"']+)["']([^>]*)>/gi
   
-  return html.replace(linkRegex, (match, before, url, after) => {
+  return processed.replace(linkRegex, (match, before, url, after) => {
     // Skip if already a tracking link or mailto/tel links
     if (url.startsWith('mailto:') || url.startsWith('tel:') || url.includes('/api/track/click/')) {
       return match

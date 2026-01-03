@@ -21,8 +21,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Plus, Upload, Search, Tag, Trash2, Download, X, FileSpreadsheet } from 'lucide-react'
+import { Plus, Upload, Search, Tag, Trash2, Download, X, FileSpreadsheet, ChevronDown } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface TagItem {
   id: string
@@ -42,6 +49,7 @@ export default function ContactsPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [dragActive, setDragActive] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
+  const [importTagIds, setImportTagIds] = useState<string[]>([])
   
   // Bulk operations state
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -154,12 +162,15 @@ export default function ContactsPage() {
 
     setImporting(true)
     try {
-      const formData = new FormData()
-      formData.append('file', importFile)
+      const formDataObj = new FormData()
+      formDataObj.append('file', importFile)
+      if (importTagIds.length > 0) {
+        formDataObj.append('tagIds', JSON.stringify(importTagIds))
+      }
       
       const response = await fetch('/api/contacts/import', {
         method: 'POST',
-        body: formData,
+        body: formDataObj,
       })
 
       const result = await response.json()
@@ -167,6 +178,7 @@ export default function ContactsPage() {
         toast.success(`Import complete: ${result.created} created, ${result.updated} updated`)
         setImportDialogOpen(false)
         setImportFile(null)
+        setImportTagIds([])
         fetchContacts()
       } else {
         toast.error(result.error || 'Failed to import contacts')
@@ -177,6 +189,20 @@ export default function ContactsPage() {
       setImporting(false)
     }
   }
+
+  const toggleImportTag = (tagId: string) => {
+    setImportTagIds(prev => 
+      prev.includes(tagId)
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    )
+  }
+
+  const removeImportTag = (tagId: string) => {
+    setImportTagIds(prev => prev.filter(id => id !== tagId))
+  }
+
+  const selectedImportTags = tags.filter(tag => importTagIds.includes(tag.id))
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -309,7 +335,10 @@ export default function ContactsPage() {
         <div className="flex gap-2">
           <Dialog open={importDialogOpen} onOpenChange={(open) => {
             setImportDialogOpen(open)
-            if (!open) setImportFile(null)
+            if (!open) {
+              setImportFile(null)
+              setImportTagIds([])
+            }
           }}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -376,6 +405,73 @@ export default function ContactsPage() {
                       <p className="text-xs text-slate-500">CSV files only</p>
                     </div>
                   )}
+                </div>
+                <div>
+                  <Label>Assign to Groups (Optional)</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-between bg-slate-900 border-slate-700 hover:bg-slate-800"
+                      >
+                        {importTagIds.length === 0
+                          ? 'Select groups...'
+                          : `${importTagIds.length} group${importTagIds.length > 1 ? 's' : ''} selected`}
+                        <ChevronDown className="ml-2 h-4 w-4 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      {tags.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-slate-400">
+                          No groups available
+                        </div>
+                      ) : (
+                        tags.map((tag) => (
+                          <DropdownMenuCheckboxItem
+                            key={tag.id}
+                            checked={importTagIds.includes(tag.id)}
+                            onCheckedChange={() => toggleImportTag(tag.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              {tag.name}
+                            </div>
+                          </DropdownMenuCheckboxItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {selectedImportTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedImportTags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="secondary"
+                          className="pl-2 pr-1 py-1"
+                          style={{ borderColor: tag.color, borderWidth: 1 }}
+                        >
+                          <div
+                            className="w-2 h-2 rounded-full mr-1.5"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                          {tag.name}
+                          <button
+                            type="button"
+                            onClick={() => removeImportTag(tag.id)}
+                            className="ml-1 hover:bg-slate-600 rounded p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-400 mt-1">
+                    Imported contacts will be added to selected groups
+                  </p>
                 </div>
                 <Button 
                   onClick={handleImport} 
