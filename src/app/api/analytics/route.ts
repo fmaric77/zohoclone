@@ -161,11 +161,11 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.json({
-      eventCounts: eventCounts.map((e) => ({
+      eventCounts: eventCounts.map((e: { type: string; _count: { id: number } }) => ({
         type: e.type,
         count: e._count.id,
       })),
-      dailyEvents: dailyEvents.map((e) => ({
+      dailyEvents: dailyEvents.map((e: { date: string; type: string; count: bigint }) => ({
         date: e.date,
         type: e.type,
         count: Number(e.count),
