@@ -51,7 +51,7 @@ This will create all the necessary tables in your RDS database.
 ### 5. Verify Connection
 
 You can test the connection by running:
-
+#dawdwa
 ```bash
 npm run db:studio
 ```
