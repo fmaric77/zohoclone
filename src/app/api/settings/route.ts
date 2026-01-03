@@ -1,8 +1,4 @@
 import { NextResponse } from 'next/server'
-import { readFile, writeFile } from 'fs/promises'
-import { join } from 'path'
-
-const SETTINGS_FILE = join(process.cwd(), 'settings.json')
 
 interface Settings {
   sesFromEmail: string
@@ -10,20 +6,21 @@ interface Settings {
 }
 
 async function getSettings(): Promise<Settings> {
-  try {
-    const data = await readFile(SETTINGS_FILE, 'utf-8')
-    return JSON.parse(data)
-  } catch {
-    // Return defaults if file doesn't exist
-    return {
-      sesFromEmail: process.env.SES_FROM_EMAIL || process.env.NEXT_PUBLIC_SES_FROM_EMAIL || '',
-      appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    }
+  // In Vercel/serverless, we use environment variables
+  // Filesystem is read-only except for /tmp
+  return {
+    sesFromEmail: process.env.SES_FROM_EMAIL || process.env.NEXT_PUBLIC_SES_FROM_EMAIL || '',
+    appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   }
 }
 
 async function saveSettings(settings: Settings): Promise<void> {
-  await writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8')
+  // In Vercel/serverless, we can't write to filesystem
+  // Settings are managed via environment variables in Vercel dashboard
+  // This function is kept for API compatibility but doesn't persist
+  // Users should set environment variables in Vercel dashboard
+  console.log('Settings save requested (using env vars):', settings)
+  // Note: In production, you could store these in a database table
 }
 
 export async function GET() {

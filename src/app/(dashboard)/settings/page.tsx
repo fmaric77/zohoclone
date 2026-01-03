@@ -114,15 +114,23 @@ export default function SettingsPage() {
                 Used for tracking links and unsubscribe URLs
               </p>
             </div>
+            <div className="p-3 rounded bg-amber-900/20 border border-amber-700/50">
+              <p className="text-sm text-amber-300">
+                ⚠️ <strong>Note:</strong> Settings are managed via environment variables in Vercel.
+                Changes here are for reference only. To update settings, configure environment variables in your Vercel project settings.
+              </p>
+            </div>
             {error && (
               <p className="text-sm text-destructive">{error}</p>
             )}
             {success && (
-              <p className="text-sm text-green-400">Settings saved successfully!</p>
+              <p className="text-sm text-green-400">
+                Settings displayed (managed via environment variables)
+              </p>
             )}
-            <Button onClick={handleSave} disabled={saving || loading}>
+            <Button onClick={handleSave} disabled={saving || loading} variant="outline">
               <Save className="mr-2 h-4 w-4" />
-              {saving ? 'Saving...' : 'Save Settings'}
+              {saving ? 'Saving...' : 'Save Settings (Read-only)'}
             </Button>
           </CardContent>
         </Card>
