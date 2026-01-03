@@ -4,6 +4,14 @@
       "path": "/api/cron/send",
       "schedule": "*/5 * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/send/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/send/route.ts": {
+      "maxDuration": 300
+    }
+  }
 }
 

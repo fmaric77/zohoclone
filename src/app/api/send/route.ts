@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     campaignId = body.campaignId
-    const { resend, resendMode } = body
+    const { resend, resendMode, resume } = body
 
     if (!campaignId) {
       return NextResponse.json(
@@ -44,6 +44,9 @@ export async function POST(request: Request) {
       )
     }
 
+    // Allow resuming stuck SENDING campaigns
+    const isResuming = resume && campaign.status === 'SENDING'
+
     // Get contacts based on campaign tags
     const tagIds = campaign.tags.map((ct: { tagId: string }) => ct.tagId)
     
@@ -70,6 +73,19 @@ export async function POST(request: Request) {
           status: 'SUBSCRIBED',
         },
       })
+    }
+
+    // If resuming a stuck campaign, filter out contacts who already received successfully
+    if (isResuming) {
+      const existingSends = await db.emailSend.findMany({
+        where: { 
+          campaignId,
+          status: { in: ['SENT', 'DELIVERED', 'OPENED', 'CLICKED'] }
+        },
+        select: { contactId: true },
+      })
+      const sentContactIds = new Set(existingSends.map((s: { contactId: string }) => s.contactId))
+      contacts = contacts.filter((c: (typeof contacts)[number]) => !sentContactIds.has(c.id))
     }
 
     // If resending to new contacts only, filter out those who already received
@@ -106,14 +122,16 @@ export async function POST(request: Request) {
       })
     }
 
-    // Update campaign status
-    await db.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'SENDING',
-        sentAt: resend ? campaign.sentAt : new Date(), // Keep original sentAt on resend
-      },
-    })
+    // Update campaign status (skip if already SENDING from a resume)
+    if (!isResuming) {
+      await db.campaign.update({
+        where: { id: campaignId },
+        data: {
+          status: 'SENDING',
+          sentAt: resend ? campaign.sentAt : new Date(), // Keep original sentAt on resend
+        },
+      })
+    }
 
     // Create email sends and send emails
     const results = {

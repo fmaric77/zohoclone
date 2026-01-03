@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Edit, Send, Trash2, Copy, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Edit, Send, Trash2, Copy, RefreshCw, Play, AlertCircle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,8 @@ export default function CampaignDetailPage() {
   const [duplicating, setDuplicating] = useState(false)
   const [resendDialogOpen, setResendDialogOpen] = useState(false)
   const [resending, setResending] = useState(false)
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false)
+  const [resuming, setResuming] = useState(false)
 
   useEffect(() => {
     if (params.id) {
@@ -156,6 +158,69 @@ export default function CampaignDetailPage() {
     }
   }
 
+  const handleResume = async () => {
+    if (!campaign) return
+
+    setResuming(true)
+    try {
+      const response = await fetch(`/api/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          campaignId: campaign.id,
+          resume: true,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.sent > 0) {
+          toast.success(`Resume complete! ${result.sent} more emails sent.`)
+          if (result.failed > 0) {
+            toast.warning(`${result.failed} emails failed to send`)
+          }
+        } else {
+          toast.info('No remaining emails to send. Campaign marked as sent.')
+        }
+        setResumeDialogOpen(false)
+        fetchCampaign(campaign.id)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || error.details || 'Failed to resume campaign', { duration: 10000 })
+      }
+    } catch (error) {
+      toast.error('Failed to resume campaign')
+    } finally {
+      setResuming(false)
+    }
+  }
+
+  const handleForceStatus = async (status: 'SENT' | 'DRAFT') => {
+    if (!campaign) return
+
+    setResuming(true)
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, forceStatus: true }),
+      })
+
+      if (response.ok) {
+        toast.success(`Campaign status updated to ${status}`)
+        setResumeDialogOpen(false)
+        fetchCampaign(campaign.id)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to update campaign status')
+      }
+    } catch (error) {
+      toast.error('Failed to update campaign status')
+    } finally {
+      setResuming(false)
+    }
+  }
+
   const handleResend = async (mode: 'new' | 'all') => {
     if (!campaign) return
 
@@ -255,6 +320,16 @@ export default function CampaignDetailPage() {
               <Button onClick={handleSend} disabled={sending}>
                 <Send className="mr-2 h-4 w-4" />
                 {sending ? 'Sending...' : 'Send Now'}
+              </Button>
+            )}
+            {campaign.status === 'SENDING' && (
+              <Button 
+                variant="default" 
+                onClick={() => setResumeDialogOpen(true)}
+                className="bg-yellow-600 hover:bg-yellow-700"
+              >
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Stuck - Fix
               </Button>
             )}
             {campaign.status === 'SENT' && (
@@ -426,6 +501,64 @@ export default function CampaignDetailPage() {
             </Button>
             {resending && (
               <p className="text-center text-sm text-slate-400">Sending...</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Resume Stuck Campaign Dialog */}
+      <Dialog open={resumeDialogOpen} onOpenChange={setResumeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Campaign Stuck in Sending</DialogTitle>
+            <DialogDescription>
+              This campaign appears to be stuck. This can happen due to server timeouts.
+              Choose how to proceed:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-4">
+            <Button
+              className="w-full justify-start h-auto py-4"
+              variant="default"
+              onClick={handleResume}
+              disabled={resuming}
+            >
+              <Play className="mr-3 h-5 w-5" />
+              <div className="text-left">
+                <div className="font-semibold">Resume Sending</div>
+                <div className="text-sm opacity-80 font-normal">
+                  Continue sending to contacts who haven't received the email yet
+                </div>
+              </div>
+            </Button>
+            <Button
+              className="w-full justify-start h-auto py-4"
+              variant="outline"
+              onClick={() => handleForceStatus('SENT')}
+              disabled={resuming}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Mark as Sent</div>
+                <div className="text-sm text-slate-400 font-normal">
+                  Complete the campaign with current sends (skip remaining)
+                </div>
+              </div>
+            </Button>
+            <Button
+              className="w-full justify-start h-auto py-4"
+              variant="outline"
+              onClick={() => handleForceStatus('DRAFT')}
+              disabled={resuming}
+            >
+              <div className="text-left">
+                <div className="font-semibold">Reset to Draft</div>
+                <div className="text-sm text-slate-400 font-normal">
+                  Put campaign back in draft state for editing
+                </div>
+              </div>
+            </Button>
+            {resuming && (
+              <p className="text-center text-sm text-slate-400">Processing...</p>
             )}
           </div>
         </DialogContent>

@@ -10,6 +10,7 @@ const updateSchema = z.object({
   status: z.enum(['DRAFT', 'SCHEDULED', 'SENDING', 'SENT', 'CANCELLED']).optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
   tagIds: z.array(z.string()).optional(),
+  forceStatus: z.boolean().optional(), // Allow force-updating status for stuck campaigns
 })
 
 export async function GET(
@@ -92,7 +93,7 @@ export async function PATCH(
     const body = await request.json()
     const data = updateSchema.parse(body)
 
-    const { tagIds, scheduledAt, ...updateData } = data
+    const { tagIds, scheduledAt, forceStatus, ...updateData } = data
 
     // Update tags if provided
     if (tagIds !== undefined) {
