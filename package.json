@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
+    "type-check:strict": "bash scripts/type-check.sh",
     "setup:password": "node scripts/setup-password.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",

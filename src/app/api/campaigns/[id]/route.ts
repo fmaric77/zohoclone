@@ -45,7 +45,7 @@ export async function GET(
     }
 
     // Calculate potential recipients based on campaign tags
-    const tagIds = campaign.tags.map((ct) => ct.tagId)
+    const tagIds = campaign.tags.map((ct: { tagId: string }) => ct.tagId)
     let potentialRecipients = 0
 
     if (tagIds.length > 0) {
