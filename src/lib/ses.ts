@@ -38,6 +38,7 @@ export async function sendEmail({
         },
       },
     },
+    ConfigurationSetName: process.env.SES_CONFIGURATION_SET || 'my-first-configuration-set',
   })
 
   const response = await sesClient.send(command)

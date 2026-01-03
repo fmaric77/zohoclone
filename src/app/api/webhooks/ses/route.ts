@@ -55,9 +55,27 @@ export async function POST(request: Request) {
 
     // Handle SNS subscription confirmation
     if (message.Type === 'SubscriptionConfirmation') {
-      // In production, you should verify the subscription URL
-      console.log('SNS Subscription Confirmation received')
-      return NextResponse.json({ message: 'Subscription confirmed' })
+      console.log('SNS Subscription Confirmation received', {
+        TopicArn: message.TopicArn,
+        MessageId: message.MessageId,
+      })
+      
+      // Fetch the subscription URL to confirm
+      try {
+        const subscribeUrl = message.Message.match(/https:\/\/[^\s"]+/)?.[0]
+        if (subscribeUrl) {
+          const response = await fetch(subscribeUrl)
+          if (response.ok) {
+            console.log('SNS subscription confirmed successfully')
+            return NextResponse.json({ message: 'Subscription confirmed' })
+          }
+        }
+      } catch (error) {
+        console.error('Error confirming SNS subscription:', error)
+      }
+      
+      // Return success even if auto-confirmation fails (manual confirmation may be needed)
+      return NextResponse.json({ message: 'Subscription confirmation received' })
     }
 
     // Handle SNS notification
