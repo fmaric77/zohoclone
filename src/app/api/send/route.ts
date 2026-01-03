@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         select: { contactId: true },
       })
       const sentContactIds = new Set(existingSends.map((s: { contactId: string }) => s.contactId))
-      contacts = contacts.filter(c => !sentContactIds.has(c.id))
+      contacts = contacts.filter((c: { id: string }) => !sentContactIds.has(c.id))
     }
 
     // Filter out invalid emails based on validation status
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 
     if (contacts.length === 0) {
       // Provide more diagnostic information
-      const tagNames = campaign.tags.map(ct => ct.tag.name).join(', ')
+      const tagNames = campaign.tags.map((ct: { tag: { name: string } }) => ct.tag.name).join(', ')
       const diagnosticMessage = tagIds.length > 0
         ? `No subscribed contacts found with tags: ${tagNames || 'none'}`
         : 'No subscribed contacts found in database'
