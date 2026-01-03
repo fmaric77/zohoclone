@@ -37,7 +37,7 @@ export async function POST(
         // Copy tags
         tags: original.tags.length > 0
           ? {
-              create: original.tags.map((ct) => ({
+              create: original.tags.map((ct: { tagId: string }) => ({
                 tagId: ct.tagId,
               })),
             }
