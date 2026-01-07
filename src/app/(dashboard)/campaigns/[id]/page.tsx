@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
 
 interface Campaign {
   id: string
@@ -47,6 +48,13 @@ export default function CampaignDetailPage() {
   const [resending, setResending] = useState(false)
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false)
   const [resuming, setResuming] = useState(false)
+  const [sendProgress, setSendProgress] = useState<{
+    sent: number
+    total: number
+    failed: number
+    currentBatch: number
+    remaining: number
+  } | null>(null)
 
   useEffect(() => {
     if (params.id) {
@@ -77,6 +85,16 @@ export default function CampaignDetailPage() {
     let totalSent = 0
     let totalFailed = 0
     let batchNumber = 0
+    let totalContacts = campaign.potentialRecipients || 0
+
+    // Initialize progress
+    setSendProgress({
+      sent: 0,
+      total: totalContacts,
+      failed: 0,
+      currentBatch: 0,
+      remaining: totalContacts,
+    })
 
     try {
       // Send in batches until no more remaining
@@ -101,12 +119,23 @@ export default function CampaignDetailPage() {
         const result = await response.json()
         totalSent += result.sent || 0
         totalFailed += result.failed || 0
+        
+        // Update total if we got it from the API
+        if (result.total && result.total > totalContacts) {
+          totalContacts = result.total
+        }
 
-        // Show progress for multi-batch sends
-        if (result.remaining > 0) {
-          toast.info(`Batch ${batchNumber} complete: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
-        } else {
-          // All done
+        // Update progress
+        setSendProgress({
+          sent: totalSent,
+          total: totalContacts,
+          failed: totalFailed,
+          currentBatch: batchNumber,
+          remaining: result.remaining || 0,
+        })
+
+        // All done
+        if (result.remaining === 0) {
           break
         }
       }
@@ -126,6 +155,7 @@ export default function CampaignDetailPage() {
       toast.error('Failed to send campaign')
     } finally {
       setSending(false)
+      setSendProgress(null)
     }
   }
 
@@ -181,6 +211,16 @@ export default function CampaignDetailPage() {
     let totalSent = 0
     let totalFailed = 0
     let batchNumber = 0
+    let totalContacts = campaign.potentialRecipients || 0
+
+    // Initialize progress
+    setSendProgress({
+      sent: campaign._count.emailSends || 0,
+      total: totalContacts,
+      failed: 0,
+      currentBatch: 0,
+      remaining: totalContacts - (campaign._count.emailSends || 0),
+    })
 
     try {
       // Send in batches until no more remaining
@@ -205,12 +245,24 @@ export default function CampaignDetailPage() {
         const result = await response.json()
         totalSent += result.sent || 0
         totalFailed += result.failed || 0
+        
+        // Update total if we got it from the API
+        if (result.total && result.total > totalContacts) {
+          totalContacts = result.total
+        }
 
-        // Show progress for multi-batch sends
-        if (result.remaining > 0) {
-          toast.info(`Batch ${batchNumber}: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
-        } else {
-          // All done
+        // Update progress
+        const currentSent = (campaign._count.emailSends || 0) + totalSent
+        setSendProgress({
+          sent: currentSent,
+          total: totalContacts,
+          failed: totalFailed,
+          currentBatch: batchNumber,
+          remaining: result.remaining || 0,
+        })
+
+        // All done
+        if (result.remaining === 0) {
           break
         }
       }
@@ -230,6 +282,7 @@ export default function CampaignDetailPage() {
       toast.error('Failed to resume campaign')
     } finally {
       setResuming(false)
+      setSendProgress(null)
     }
   }
 
@@ -267,6 +320,16 @@ export default function CampaignDetailPage() {
     let totalSent = 0
     let totalFailed = 0
     let batchNumber = 0
+    let totalContacts = campaign.potentialRecipients || 0
+
+    // Initialize progress
+    setSendProgress({
+      sent: 0,
+      total: totalContacts,
+      failed: 0,
+      currentBatch: 0,
+      remaining: totalContacts,
+    })
 
     try {
       // Send in batches until no more remaining
@@ -293,12 +356,23 @@ export default function CampaignDetailPage() {
         const result = await response.json()
         totalSent += result.sent || 0
         totalFailed += result.failed || 0
+        
+        // Update total if we got it from the API
+        if (result.total && result.total > totalContacts) {
+          totalContacts = result.total
+        }
 
-        // Show progress for multi-batch sends
-        if (result.remaining > 0) {
-          toast.info(`Batch ${batchNumber}: ${result.sent} sent. ${result.remaining} remaining...`, { duration: 3000 })
-        } else {
-          // All done
+        // Update progress
+        setSendProgress({
+          sent: totalSent,
+          total: totalContacts,
+          failed: totalFailed,
+          currentBatch: batchNumber,
+          remaining: result.remaining || 0,
+        })
+
+        // All done
+        if (result.remaining === 0) {
           break
         }
       }
@@ -320,6 +394,7 @@ export default function CampaignDetailPage() {
       toast.error('Failed to resend campaign')
     } finally {
       setResending(false)
+      setSendProgress(null)
     }
   }
 
@@ -608,6 +683,53 @@ export default function CampaignDetailPage() {
             </Button>
             {resuming && (
               <p className="text-center text-sm text-slate-400">Processing...</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sending Progress Dialog */}
+      <Dialog open={sendProgress !== null} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Sending Campaign</DialogTitle>
+            <DialogDescription>
+              {sendProgress?.currentBatch ? `Batch ${sendProgress.currentBatch} in progress...` : 'Preparing to send...'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Progress</span>
+                <span className="text-slate-100 font-medium">
+                  {sendProgress?.sent || 0} / {sendProgress?.total || 0}
+                </span>
+              </div>
+              <Progress 
+                value={sendProgress ? (sendProgress.sent / sendProgress.total) * 100 : 0} 
+                className="h-3"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-slate-400">Sent</p>
+                <p className="text-slate-100 font-semibold text-lg">{sendProgress?.sent || 0}</p>
+              </div>
+              <div>
+                <p className="text-slate-400">Remaining</p>
+                <p className="text-slate-100 font-semibold text-lg">{sendProgress?.remaining || 0}</p>
+              </div>
+              {sendProgress && sendProgress.failed > 0 && (
+                <div className="col-span-2">
+                  <p className="text-slate-400">Failed</p>
+                  <p className="text-red-400 font-semibold text-lg">{sendProgress.failed}</p>
+                </div>
+              )}
+            </div>
+            {sendProgress && sendProgress.remaining > 0 && (
+              <p className="text-xs text-center text-slate-400">
+                Sending in batches... {sendProgress.remaining} emails remaining
+              </p>
             )}
           </div>
         </DialogContent>
